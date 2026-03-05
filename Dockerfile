@@ -8,19 +8,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certifi
     && useradd -m appuser
 
 WORKDIR /app
-
-# 2. Python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 3. Source code & Environment setup
 COPY analyze.py crontab ./
 RUN mkdir logs /secrets && chown -R appuser:appuser /app /secrets
 
 USER appuser
 
-# Healthcheck: Verify supercronic is running
-HEALTHCHECK --interval=1m --timeout=10s --start-period=30s --retries=3 \
-    CMD ps -ef | grep [s]upercronic || exit 1
+# Healthcheck: Verify supercronic is running (PID 1)
+HEALTHCHECK --interval=5m --timeout=5s --start-period=30s --retries=3 \
+    CMD kill -0 1 || exit 1
 
 CMD ["supercronic", "crontab"]

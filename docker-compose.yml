@@ -10,9 +10,16 @@ services:
     env_file:
       - .env
 
-    # Healthcheck: Ensures supercronic is running
+    # ── Volumes ─────────────────────────────────────────────────────────────
+    # Mounts the service account key inside the container
+    volumes:
+      - ./service.json:/secrets/service.json:ro
+      - ./logs:/app/logs
+
+    # ── Healthcheck ─────────────────────────────────────────────────────────
+    # Verifies supercronic (PID 1) is active
     healthcheck:
-      test: ["CMD-SHELL", "ps -ef | grep [s]upercronic || exit 1"]
-      interval: 1m
-      timeout: 10s
+      test: ["CMD-SHELL", "kill -0 1 || exit 1"]
+      interval: 5m
+      timeout: 5s
       retries: 3

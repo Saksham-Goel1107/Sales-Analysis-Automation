@@ -30,8 +30,11 @@ from typing import TYPE_CHECKING
 import gspread
 import numpy as np
 import pandas as pd
+import requests
 from google.oauth2.service_account import Credentials
 from dotenv import load_dotenv
+from urllib3.util.retry import Retry
+from requests.adapters import HTTPAdapter
 
 # Load .env file for local test runs (Docker supplies env vars automatically)
 load_dotenv()
@@ -67,6 +70,28 @@ OUTPUT_SHEET_ID      = _require_env("OUTPUT_SHEET_ID")
 SALES_WORKSHEET      = os.environ.get("SALES_WORKSHEET", "Sheet1")
 CASHIER_ID           = os.environ.get("CASHIER_ID",      "sw-noida-cashier")
 TIMEZONE             = os.environ.get("TIMEZONE",         "Asia/Kolkata")
+HEARTBEAT_URL        = os.environ.get("HEARTBEAT_URL",    "https://uptime.betterstack.com/api/v1/heartbeat/bGYKmsV68UZrak1Haq6eTzPp")
+
+# ── Heartbeat Helper ────────────────────────────────────────────────────────
+def send_heartbeat(status: str = "success") -> None:
+    """Send a heartbeat to BetterStack with retries."""
+    if not HEARTBEAT_URL:
+        return
+
+    url = HEARTBEAT_URL if status == "success" else f"{HEARTBEAT_URL}/fail"
+    
+    # Configure retries: 3 attempts with exponential backoff
+    session = requests.Session()
+    retries = Retry(total=3, backoff_factor=1, status_forcelist=[500, 502, 503, 504])
+    session.mount("https://", HTTPAdapter(max_retries=retries))
+
+    try:
+        resp = session.get(url, timeout=10)
+        resp.raise_for_status()
+        log.info("Heartbeat sent: %s", status)
+    except Exception as exc:
+        log.error("Failed to send heartbeat (%s): %s", status, exc)
+
 
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
@@ -521,6 +546,16 @@ def build_run_metadata(results: dict[str, pd.DataFrame]) -> pd.DataFrame:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def main() -> None:
+    try:
+        _run_pipeline()
+        send_heartbeat("success")
+    except Exception as exc:
+        log.critical("Pipeline failed with unhandled exception: %s", exc, exc_info=True)
+        send_heartbeat("fail")
+        sys.exit(1)
+
+
+def _run_pipeline() -> None:
     log.info("═" * 60)
     log.info("SW Noida Analysis Pipeline — %s", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
     log.info("═" * 60)
