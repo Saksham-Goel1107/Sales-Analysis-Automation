@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Env & secrets
+.env
+service.json
+*.json
+
+# Logs
+logs/
+*.log
+
+# Local Excel exports (not needed in prod)
+*.xlsx
+*.pdf
