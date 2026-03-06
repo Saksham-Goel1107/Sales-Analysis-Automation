@@ -1,23 +1,39 @@
-FROM python:3.12-slim
+FROM python:3.11-slim
 
-# 1. System dependencies & Supercronic (lightweight cron)
-RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates \
-    && curl -fsSLo /usr/local/bin/supercronic "https://github.com/aptible/supercronic/releases/download/v0.2.29/supercronic-linux-amd64" \
-    && chmod +x /usr/local/bin/supercronic \
-    && apt-get purge -y curl && rm -rf /var/lib/apt/lists/* \
-    && useradd -m appuser
+# Set timezone dynamically if requested, otherwise default to UTC
+ENV TZ=UTC
 
+# Update OS and install Cron
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends cron ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set working directory inside container
 WORKDIR /app
-COPY requirements.txt .
+
+# Copy application dependencies and install
+COPY requirements.txt /app/
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY analyze.py crontab ./
-RUN mkdir logs /secrets && chown -R appuser:appuser /app /secrets
+# Copy source repository
+COPY . /app/
 
-USER appuser
+# Ensure logs directory exists (useful when not mounting from host)
+RUN mkdir -p /app/logs
 
-# Healthcheck: Verify supercronic is running (PID 1)
-HEALTHCHECK --interval=5m --timeout=5s --start-period=30s --retries=3 \
-    CMD kill -0 1 || exit 1
+# Normalize cron file line endings (in case host is Windows)
+RUN if [ -f /app/crontab ]; then sed -i 's/\r$//' /app/crontab; fi
 
-CMD ["supercronic", "crontab"]
+# Setup Cronjob File into the container's cron.d
+# We'll copy the repo `crontab` file into /etc/cron.d and install it via crontab
+COPY crontab /etc/cron.d/stock-analyzer-cron
+
+# Give execution rights and apply cron job
+RUN chmod 0644 /etc/cron.d/stock-analyzer-cron \
+    && crontab /etc/cron.d/stock-analyzer-cron
+
+# Ensure cron log exists so `tail -f` has a file to follow
+RUN touch /var/log/cron.log
+
+# Command starts the cron daemon in the background and streams the log
+CMD cron && echo "Cron daemon started. Application running in background." && tail -f /var/log/cron.log

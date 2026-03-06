@@ -1,3 +1,3 @@
 # Fires daily at 00:30 UTC = 06:00 IST
 # Format: min hour day month weekday command
-30 0 * * * cd /app && python analyze.py >> /app/logs/analyze.log 2>&1
+30 0 * * * root cd /app && /usr/local/bin/python analyze.py >> /app/logs/analyze.log 2>&1
