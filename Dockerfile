@@ -5,7 +5,7 @@ ENV TZ=UTC
 
 # Update OS and install Cron
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends cron ca-certificates \
+    && apt-get install -y --no-install-recommends cron ca-certificates curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Set working directory inside container
@@ -21,16 +21,20 @@ COPY . /app/
 # Ensure logs directory exists (useful when not mounting from host)
 RUN mkdir -p /app/logs
 
-# Normalize cron file line endings (in case host is Windows)
-RUN if [ -f /app/crontab ]; then sed -i 's/\r$//' /app/crontab; fi
+# Some base Python images provide `python3` but not `python` symlink.
+# Ensure `/usr/bin/python` exists so wrapper scripts calling `python` work.
+RUN if [ -x "/usr/local/bin/python3" ] && [ ! -e "/usr/bin/python" ]; then \
+            ln -sf /usr/local/bin/python3 /usr/bin/python; \
+        fi
 
-# Setup Cronjob File into the container's cron.d
-# We'll copy the repo `crontab` file into /etc/cron.d and install it via crontab
+# Normalize cron file line endings (in case host is Windows)
+RUN sed -i 's/\r$//' /app/crontab
+
+# Copy cron job file into /etc/cron.d
 COPY crontab /etc/cron.d/stock-analyzer-cron
 
-# Give execution rights and apply cron job
-RUN chmod 0644 /etc/cron.d/stock-analyzer-cron \
-    && crontab /etc/cron.d/stock-analyzer-cron
+# Give correct permissions so cron will read the file
+RUN chmod 0644 /etc/cron.d/stock-analyzer-cron
 
 # Ensure cron log exists so `tail -f` has a file to follow
 RUN touch /var/log/cron.log

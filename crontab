@@ -1,3 +1,8 @@
+# Environment for cron jobs
+SHELL=/bin/bash
+PATH=/usr/local/bin:/usr/bin:/bin
+SERVICE_ACCOUNT_FILE=/secrets/service.json
+
 # Fires daily at 00:30 UTC = 06:00 IST
-# Format: min hour day month weekday command
-30 0 * * * root cd /app && /usr/local/bin/python analyze.py >> /app/logs/analyze.log 2>&1
+# Format: min hour day month weekday user command
+30 0 * * * root cd /app && set -a && [ -f /app/.env ] && . /app/.env || true && set +a && /usr/local/bin/python analyze.py >> /app/logs/analyze.log 2>&1
